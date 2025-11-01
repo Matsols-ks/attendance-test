@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Attendance</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    select {
+      padding: 5px;
+      margin-right: 10px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Attendance Sheet</h2>
+  <p id="dateDisplay"></p>
+
+  <label>Class:
+    <select id="classSelect">
+      <option value="">Select Class</option>
+      <option value="cpss">CPSS</option>
+      <option value="AIR">AIR</option>
+    </select>
+  </label>
+
+  <label>Subject:
+    <select id="subjectSelect">
+      <option value="">Select Subject</option>
+    </select>
+  </label>
+
+  <table id="attendanceTable">
+    <thead>
+      <tr>
+        <th>Roll No</th>
+        <th>Name</th>
+        <th>Present</th>
+        <th>Absent</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <button onclick="exportToPDF()">Export to PDF</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const today = new Date();
+    const dateKey = today.toISOString().split('T')[0];
+    document.getElementById("dateDisplay").innerText = "Date: " + today.toDateString();
+
+    const studentLists = {
+      cpss: ["Satish", "Dharshan", "Sahana", "Charishma", "Rahul", "Dinesh", "Venkat", "Priya", "Ramya", "Monisaa"],
+      AIR: ["Pardhu", "Sujan", "Shashank", "Pavani", "Phani", "Chaitu", "Sudheer", "Kaythrah", "Kamaliee", "Pooja"]
+    };
+
+    const subjectLists = {
+      cpss: ["CT", "EOC", "CPS", "MAOM", "EEE", "MIE", "CYBER SECURITY"],
+      AIR: ["CT", "EOC", "EEE", "MIE", "MAOM", "MECHANICS", "TECHNICAL COMMUNICATION"]
+    };
+
+    function getStorageKey() {
+      const className = document.getElementById("classSelect").value;
+      const subjectName = document.getElementById("subjectSelect").value;
+      return `${dateKey}_${className}_${subjectName}`;
+    }
+
+    function renderSubjects() {
+      const className = document.getElementById("classSelect").value;
+      const subjectSelect = document.getElementById("subjectSelect");
+      subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+
+      if (!subjectLists[className]) return;
+
+      subjectLists[className].forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject;
+        option.textContent = subject;
+        subjectSelect.appendChild(option);
+      });
+    }
+
+    function renderTable() {
+      const className = document.getElementById("classSelect").value;
+      const tbody = document.querySelector("#attendanceTable tbody");
+      tbody.innerHTML = "";
+
+      if (!studentLists[className]) return;
+
+      studentLists[className].forEach((name, index) => {
+        const roll = index + 1;
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${roll}</td>
+          <td>${name}</td>
+          <td><input type="radio" name="attendance${roll}" value="Present"></td>
+          <td><input type="radio" name="attendance${roll}" value="Absent"></td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      document.querySelectorAll("input[type=radio]").forEach(input => {
+        input.addEventListener("change", saveAttendance);
+      });
+
+      loadAttendance();
+    }
+
+    function saveAttendance() {
+      const className = document.getElementById("classSelect").value;
+      const subjectName = document.getElementById("subjectSelect").value;
+      if (!className || !subjectName) return;
+
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+      const data = [];
+
+      rows.forEach(row => {
+        const roll = row.cells[0].innerText;
+        const name = row.cells[1].innerText;
+        const present = row.cells[2].querySelector("input").checked;
+        const absent = row.cells[3].querySelector("input").checked;
+        data.push({ roll, name, present, absent });
+      });
+
+      let allData = JSON.parse(localStorage.getItem("attendanceRecords")) || {};
+      allData[getStorageKey()] = {
+        date: dateKey,
+        className: className,
+        subjectName: subjectName,
+        records: data
+      };
+      localStorage.setItem("attendanceRecords", JSON.stringify(allData));
+    }
+
+    function loadAttendance() {
+      const allData = JSON.parse(localStorage.getItem("attendanceRecords"));
+      if (!allData || !allData[getStorageKey()]) return;
+
+      const saved = allData[getStorageKey()];
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+      rows.forEach((row, index) => {
+        row.cells[2].querySelector("input").checked = saved.records[index].present;
+        row.cells[3].querySelector("input").checked = saved.records[index].absent;
+      });
+    }
+
+    async function exportToPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+
+      const className = document.getElementById("classSelect").value || "N/A";
+      const subjectName = document.getElementById("subjectSelect").value || "N/A";
+
+      doc.text("Attendance Sheet", 10, y);
+      y += 10;
+      doc.text("Date: " + today.toDateString(), 10, y);
+      y += 10;
+      doc.text("Class: " + className, 10, y);
+      y += 10;
+      doc.text("Subject: " + subjectName, 10, y);
+      y += 10;
+
+      const rows = document.querySelectorAll("#attendanceTable tbody tr");
+      rows.forEach(row => {
+        const roll = row.cells[0].innerText;
+        const name = row.cells[1].innerText;
+        const present = row.cells[2].querySelector("input").checked ? "Present" : "";
+        const absent = row.cells[3].querySelector("input").checked ? "Absent" : "";
+        const status = present || absent || "Not Marked";
+        doc.text(`${roll} - ${name} - ${status}`, 10, y);
+        y += 10;
+      });
+
+      doc.save(`attendance_${dateKey}_${className}_${subjectName}.pdf`);
+    }
+
+    document.getElementById("classSelect").addEventListener("change", () => {
+      renderSubjects();
+      renderTable();
+    });
+
+    document.getElementById("subjectSelect").addEventListener("change", () => {
+      renderTable();
+      saveAttendance();
+    });
+
+    window.onload = () => {
+      document.getElementById("classSelect").value = "cpss";
+      renderSubjects();
+      document.getElementById("subjectSelect").value = "CT";
+      renderTable();
+    };
+  </script>
+</body>
+</html>
